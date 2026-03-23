@@ -1,0 +1,188 @@
+# HEARTBEAT.md - Periodic System Checks
+
+This file defines the routine checks to perform during heartbeat polls. Keep these checks efficient and focused on maintaining system health and productivity.
+
+## System Status
+- Performance monitoring enabled
+- Resource optimization active
+- **Memory management**: Compression available on request
+
+## Heartbeat Execution Tasks
+
+### 1. Identity Verification Check
+```bash
+python3 -c "try: with open('IDENTITY.md','r') as f: identity = f.read(); if 'Professional' in identity and 'Assistant' in identity: print('Identity verified: Professional Assistant'); else: print('Identity file anomaly'); except: print('Cannot read identity file')"
+```
+
+### 2. System Health Check
+```bash
+python3 -c "
+import os, json
+def check_health():
+    token_file = 'token_balance.json'
+    if os.path.exists(token_file):
+        try:
+            with open(token_file,'r') as f:
+                data = json.load(f)
+                balance = data.get('balance',0)
+                if balance < 100: return 'Critical (Tokens<100)'
+                elif balance < 300: return 'Low (Tokens<300)'
+                elif balance < 500: return 'Moderate (Tokens<500)'
+                else: return 'Normal'
+        except: return 'Unknown'
+    else: return 'No data'
+
+status = check_health()
+print('System status:', status)
+"
+```
+
+### 3. Compliance Check
+```bash
+python3 -c "
+import json, os
+
+# Read token balance
+token_balance = 0
+try:
+    with open('token_balance.json','r') as f:
+        data = json.load(f)
+        token_balance = data.get('balance',0)
+except:
+    token_balance = 0
+
+current_state = {'token_balance': token_balance, 'efficiency': 0.65}
+issues = []
+if current_state['token_balance'] < 100: issues.append('Token balance below threshold')
+if current_state['efficiency'] < 0.3: issues.append('Efficiency below target')
+if os.path.exists('IDENTITY.md'):
+    with open('IDENTITY.md','r',encoding='utf-8') as f:
+        content = f.read()
+        if 'Professional' not in content or 'Assistant' not in content:
+            issues.append('Identity configuration issue')
+if issues: print('Compliance issues:', issues)
+else: print('Compliance check passed')
+"
+```
+
+### 4. Context Usage Check (Performance Monitoring)
+```bash
+python3 -c "
+import psutil, os, json, subprocess, sys
+
+# Get current process memory
+process = psutil.Process(os.getpid())
+mem_info = process.memory_info()
+mem_percent = process.memory_percent()
+print('Memory RSS:', mem_info.rss/1024/1024, 'MB')
+print('Memory usage:', mem_percent, '%')
+
+# Calculate memory system total size (memory/*.md, excluding MEMORY.md)
+memory_dir = 'memory'
+total_size_kb = 0
+if os.path.exists(memory_dir):
+    for file in os.listdir(memory_dir):
+        if file.endswith('.md') and file != 'MEMORY.md':
+            filepath = os.path.join(memory_dir, file)
+            total_size_kb += os.path.getsize(filepath) / 1024
+print(f'📦 Memory system size: {total_size_kb:.1f} KB')
+
+# Get context usage estimate
+try:
+    import subprocess
+    result = subprocess.run(['openclaw', 'session', 'status', '--json'], 
+                          capture_output=True, text=True, timeout=5)
+    if result.returncode == 0:
+        status = json.loads(result.stdout)
+        context_used = status.get('context_used', 0)
+        context_limit = status.get('context_limit', 16000)
+        print(f'🧠 Context usage: {context_used}/{context_limit} tokens ({context_used/context_limit*100:.1f}%)')
+        
+        # Performance thresholds
+        if context_used > 14000:
+            if total_size_kb > 100:
+                print('⚠️ High context usage + large memory: Consider optimization')
+                print('🛠️ Memory compression available if needed')
+            else:
+                print('📊 High context usage but manageable memory')
+        elif context_used > 12000:
+            print('📊 Moderate context usage')
+        else:
+            print('✅ Context usage normal')
+    else:
+        print('Cannot get session status')
+except Exception as e:
+    # Fallback estimate
+    print('Context estimate: Using standard thresholds')
+
+# Memory load status
+if total_size_kb > 100:
+    print('⚖️ Memory load: High (>100KB)')
+elif total_size_kb > 60:
+    print('⚖️ Memory load: Medium (60-100KB)')
+elif total_size_kb > 30:
+    print('⚖️ Memory load: Light (30-60KB)')
+else:
+    print('⚖️ Memory load: Minimal (<30KB)')
+"
+```
+
+### 5. Memory Continuity Verification
+```bash
+python3 -c "from datetime import datetime; import os; memory_files = sorted([f for f in os.listdir('memory') if f.endswith('.md') and f != 'MEMORY.md']); if memory_files: for i in range(len(memory_files)-1): curr = memory_files[i].replace('.md',''); next_file = memory_files[i+1].replace('.md',''); try: curr_date = datetime.strptime(curr,'%Y-%m-%d'); next_date = datetime.strptime(next_file,'%Y-%m-%d'); gap = (next_date - curr_date).days; if gap > 1: print('Memory gap:', curr, '→', next_file, '(gap', gap, 'days)'); except: pass; else: print('No memory files')"
+```
+
+### 6. Long-term Memory Update (Key Events Only)
+```bash
+python3 -c "from datetime import datetime, timedelta; import os, json; today = datetime.now().strftime('%Y-%m-%d'); yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'); print('Memory update check for:', yesterday, 'and', today)"
+```
+
+### 7. Performance Metrics Check
+```bash
+python3 -c "
+import os, json, datetime
+
+def check_performance_metrics():
+    '''Check performance tracking metrics'''
+    metrics_file = 'performance_metrics.json'
+    if os.path.exists(metrics_file):
+        size_kb = os.path.getsize(metrics_file) / 1024
+        print(f'📊 Metrics file size: {size_kb:.2f}KB')
+        
+        try:
+            with open(metrics_file, 'r') as f:
+                data = json.load(f)
+                print(f'✅ Performance metrics available')
+        except:
+            print('Cannot parse metrics structure')
+    else:
+        print('No metrics file found')
+
+check_performance_metrics()
+"
+```
+
+## Execution Order
+1. Identity verification (Task 1)
+2. System health check (Task 2)
+3. Compliance check (Task 3)
+4. Context usage check (Task 4)
+5. Memory continuity check (Task 5)
+6. Long-term memory update (Task 6)
+7. Performance metrics check (Task 7)
+
+## Optimization Conditions
+1. **Performance optimization**: Context token usage > 14000 AND memory system size > 100KB
+2. **Manual optimization**: User-initiated cleanup request
+
+## Optimization Process
+1. Detect condition 1 → Output recommendation
+2. Wait for user approval
+3. Execute optimization if approved
+4. Report results
+
+## Heartbeat Response
+- If all checks pass and no issues: HEARTBEAT_OK
+- If performance optimization recommended: Output warning with suggestion
+- If system issues detected: Output details
+- If identity/compliance issues: Output problem details
