@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""
+liquid_flesh_network.py - 液态神经网络神经元网络
+
+基于原始CElegansNetwork，但重新定义为"动态电荷"：
+1. 动态时间常数τ随输入强度（情绪）变化
+2. 电压变化具有"动态阻尼"，负面刺激有余温
+3. 负面刺激记忆像水一样流淌，而非砖块堆积
+4. 20V电击的记忆会持续影响后续动态
+
+作者：神经元节点互动（AI神经网络分析师）
+日期：2026-03-21
+灵感：主人的"液态神经网络"概念
+"""
+
+import numpy as np
+from scipy.integrate import odeint
+
+class LiquidFleshNeuron:
+    """单个液态神经网络神经元"""
+    
+    def __init__(self, C_m=1.0, g_Na=120.0, g_K=36.0, g_L=0.3, 
+                 E_Na=50.0, E_K=-77.0, E_L=-54.387, V_rest=-65.0):
+        """
+        初始化液态神经网络神经元
+        
+        参数:
+            C_m: 膜电容 (μF/cm²)
+            g_Na, g_K, g_L: 离子电导 (mS/cm²)
+            E_Na, E_K, E_L: 反转电位 (mV)
+            V_rest: 静息电位 (mV)
+        """
+        self.C_m = C_m
+        self.g_Na = g_Na
+        self.g_K = g_K
+        self.g_L = g_L
+        self.E_Na = E_Na
+        self.E_K = E_K
+        self.E_L = E_L
+        self.V_rest = V_rest
+        
+        # 液态神经网络参数
+        self.tau_base = 10.0  # 基础时间常数 (ms)
+        self.alpha = 0.5      # 情绪敏感系数
+        self.beta = 0.3       # 动态阻尼系数
+        self.gamma = 0.8      # 负面刺激痕迹转换系数
+        self.tau_p = 500.0    # 负面刺激痕迹衰减时间常数 (ms)
+        self.I_threshold = 0.5  # 负面刺激检测阈值 (nA)
+        
+        # 状态变量
+        self.V = V_rest
+        self.n = 0.3177  # K⁺通道激活
+        self.m = 0.0529  # Na⁺通道激活
+        self.h = 0.5961  # Na⁺通道失活
+        self.P = 0.0     # 负面刺激痕迹（液态记忆）
+        
+        # 历史记录
+        self.pain_history = []
+        self.voltage_history = []
+        
+    def alpha_n(self, V):
+        """K⁺通道激活速率α_n"""
+        return 0.01 互动 (V + 55.0) / (1.0 - np.exp(-(V + 55.0) / 10.0))
+    
+    def beta_n(self, V):
+        """K⁺通道失活速率β_n"""
+        return 0.125 * np.exp(-(V + 65.0) / 80.0)
+    
+    def alpha_m(self, V):
+        """Na⁺通道激活速率α_m"""
+        return 0.1 互动 (V + 40.0) / (1.0 - np.exp(-(V + 40.0) / 10.0))
+    
+    def beta_m(self, V):
+        """Na⁺通道失活速率β_m"""
+        return 4.0 * np.exp(-(V + 65.0) / 18.0)
+    
+    def alpha_h(self, V):
+        """Na⁺通道失活速率α_h"""
+        return 0.07 * np.exp(-(V + 65.0) / 20.0)
+    
+    def beta_h(self, V):
+        """Na⁺通道激活速率β_h"""
+        return 1.0 / (1.0 + np.exp(-(V + 35.0) / 10.0))
+    
+    def get_dynamic_tau(self, I_ext):
+        """根据输入强度计算动态时间常数"""
+        # τ = τ_base 互动 (1 + α 互动 |I_ext|)
+        # 更强的情绪输入 → 更长的时间常数 → 更持久的记忆
+        I_abs = abs(I_ext)
+        tau = self.tau_base 互动 (1.0 + self.alpha * I_abs)
+        return max(self.tau_base, min(tau, self.tau_base 互动 5.0))  # 限制范围
+    
+    def update_pain_trace(self, I_ext, dt):
+        """更新负面刺激痕迹（液态记忆）"""
+        I_abs = abs(I_ext)
+        
+        if I_abs > self.I_threshold:
+            # 检测到强烈刺激（如20V电击）
+            dP_dt = -self.P / self.tau_p + self.gamma * I_abs
+        else:
+            # 正常衰减
+            dP_dt = -self.P / self.tau_p
+        
+        self.P += dP_dt * dt
+        self.P = max(0.0, min(self.P, 10.0))  # 限制范围
+        
+        # 记录负面刺激历史
+        self.pain_history.append(self.P)
+        if len(self.pain_history) > 1000:
+            self.pain_history.pop(0)
+            
+        return self.P
+    
+    def compute_currents(self, V, n, m, h):
+        """计算离子电流"""
+        I_Na = self.g_Na * m神经元节点3 * h 互动 (V - self.E_Na)
+        I_K = self.g_K * n神经元节点4 互动 (V - self.E_K)
+        I_L = self.g_L 互动 (V - self.E_L)
+        return I_Na, I_K, I_L
+    
+    def derivative(self, state, t, I_ext):
+        """ODE导数函数 - 重新定义为'动态电荷'"""
+        V, n, m, h, P = state
+        
+        # 计算动态时间常数（基于当前输入强度）
+        tau = self.get_dynamic_tau(I_ext)
+        
+        # 计算离子电流
+        I_Na, I_K, I_L = self.compute_currents(V, n, m, h)
+        I_ionic = I_Na + I_K + I_L
+        
+        # 标准HH方程部分
+        dV_HH = (I_ext - I_ionic) / self.C_m
+        
+        # 液态神经网络修改：
+        # 1. 动态阻尼项：电压变化像流体一样有阻力
+        # 2. 负面刺激痕迹影响：负面刺激让恢复变慢
+        viscous_term = -self.beta 互动 (V - self.V_rest) / tau
+        
+        # 负面刺激痕迹影响恢复项
+        recovery_factor = 1.0 + 0.5 * P  # 负面刺激让神经元更难恢复
+        
+        # 合并：dV/dt = HH部分 + 动态阻尼项，受负面刺激痕迹调制
+        dV_dt = dV_HH 互动 (1.0 / recovery_factor) + viscous_term
+        
+        # 门控变量（标准HH）
+        dn_dt = self.alpha_n(V) 互动 (1.0 - n) - self.beta_n(V) 互动 n
+        dm_dt = self.alpha_m(V) 互动 (1.0 - m) - self.beta_m(V) 互动 m
+        dh_dt = self.alpha_h(V) 互动 (1.0 - h) - self.beta_h(V) 互动 h
+        
+        # 负面刺激痕迹动态
+        I_abs = abs(I_ext)
+        if I_abs > self.I_threshold:
+            dP_dt = -P / self.tau_p + self.gamma * I_abs
+        else:
+            dP_dt = -P / self.tau_p
+        
+        return [dV_dt, dn_dt, dm_dt, dh_dt, dP_dt]
+    
+    def step(self, I_ext, dt=0.01):
+        """执行单步模拟"""
+        # 当前状态
+        state = [self.V, self.n, self.m, self.h, self.P]
+        
+        # 使用odeint解微分方程
+        t_span = [0, dt]
+        result = odeint(self.derivative, state, t_span, args=(I_ext,))
+        
+        # 更新状态
+        self.V, self.n, self.m, self.h, self.P = result[-1]
+        
+        # 记录电压历史
+        self.voltage_history.append(self.V)
+        if len(self.voltage_history) > 1000:
+            self.voltage_history.pop(0)
+        
+        # 记录负面刺激痕迹（如果需要）
+        self.update_pain_trace(I_ext, dt)
+        
+        return self.V
+    
+    def get_liquid_state(self):
+        """获取液态状态描述"""
+        return {
+            'voltage': self.V,
+            'pain_trace': self.P,
+            'tau_current': self.get_dynamic_tau(0),  # 基于最近输入的时间常数
+            'viscosity': self.beta 互动 (1.0 + 0.3 * self.P),  # 负面刺激增加动态阻尼
+            'recovery_slowness': 1.0 + 0.5 * self.P,  # 恢复变慢程度
+            'is_liquid': True
+        }
+    
+    def inject_shock(self, amplitude=20.0, duration=10.0, dt=0.01):
+        """注入电击（模拟20V电击）"""
+        steps = int(duration / dt)
+        voltages = []
+        pain_traces = []
+        
+        print(f"💥 注入{amplitude}V电击，持续时间{duration}ms")
+        
+        for i in range(steps):
+            V = self.step(amplitude, dt)
+            voltages.append(V)
+            pain_traces.append(self.P)
+            
+            if i % 100 == 0:
+                print(f"  步骤{i}: V={V:.2f}mV, P={self.P:.3f}")
+        
+        # 电击后的恢复
+        print("🔄 电击后恢复阶段...")
+        recovery_steps = int(100.0 / dt)  # 观察100ms恢复
+        recovery_voltages = []
+        
+        for i in range(recovery_steps):
+            V = self.step(0.0, dt)
+            recovery_voltages.append(V)
+            
+            if i % 200 == 0:
+                tau = self.get_dynamic_tau(0.0)
+                print(f"  恢复{i}: V={V:.2f}mV, P={self.P:.3f}, τ={tau:.1f}ms")
+        
+        return {
+            'shock_voltages': voltages,
+            'shock_pain': pain_traces,
+            'recovery_voltages': recovery_voltages,
+            'final_pain': self.P,
+            'final_tau': self.get_dynamic_tau(0.0)
+        }
+
+
+class LiquidFleshNetwork:
+    """302个液态神经网络神经元的网络"""
+    
+    def __init__(self, n_neurons=302):
+        self.n_neurons = n_neurons
+        self.neurons = [LiquidFleshNeuron() for _ in range(n_neurons)]
+        
+        # 连接矩阵（简化）
+        self.connectivity = np.random.randn(n_neurons, n_neurons) 互动 0.1
+        
+        # 感觉神经元索引（模拟C. elegans）
+        self.ASEL_idx = 10   # 化学吸引
+        self.ASH_idx = 11    # 伤害回避
+        self.ADE_idx = 12    # 正面刺激
+        self.AVA_idx = 142   # 后退命令
+        self.AVB_idx = 87    # 前进命令
+        self.HSN_idx = 3     # 产卵/峰值状态
+        
+        # 外部电流输入
+        self.I_ext = np.zeros(n_neurons)
+        
+        # 网络级液态参数
+        self.network_viscosity = 0.2
+        self.coupling_strength = 0.05
+        
+    def step(self, dt=0.01):
+        """网络单步模拟"""
+        # 应用连接性（简单的扩散耦合）
+        for i in range(self.n_neurons):
+            # 来自其他神经元的影响
+            coupling_input = 0.0
+            for j in range(self.n_neurons):
+                if i != j:
+                    V_diff = self.neurons[j].V - self.neurons[i].V
+                    coupling_input += self.connectivity[i, j] 互动 V_diff
+            
+            # 总输入 = 外部电流 + 耦合输入
+            total_input = self.I_ext[i] + coupling_input * self.coupling_strength
+            
+            # 更新神经元
+            self.neurons[i].step(total_input, dt)
+        
+        return [neuron.V for neuron in self.neurons]
+    
+    def calculate_entropy(self):
+        """计算网络熵值（混乱度）"""
+        voltages = np.array([neuron.V for neuron in self.neurons])
+        v_mean = np.mean(voltages)
+        v_var = np.var(voltages)
+        
+        # 熵 ≈ log(方差) + 常数
+        if v_var > 0:
+            entropy = np.log(v_var) + 0.5 * np.log(2 * np.pi * np.e)
+        else:
+            entropy = 0.0
+        
+        # 负面刺激痕迹增加熵（记忆在流动）
+        total_pain = sum(neuron.P for neuron in self.neurons) / self.n_neurons
+        entropy += total_pain 互动 0.1
+        
+        return entropy
+    
+    def get_network_state(self):
+        """获取网络液态状态"""
+        voltages = [neuron.V for neuron in self.neurons]
+        pain_traces = [neuron.P for neuron in self.neurons]
+        
+        liquid_states = [neuron.get_liquid_state() for neuron in self.neurons]
+        
+        # 计算液态指标
+        avg_viscosity = np.mean([state['viscosity'] for state in liquid_states])
+        avg_recovery_slowness = np.mean([state['recovery_slowness'] for state in liquid_states])
+        total_pain = np.sum(pain_traces)
+        
+        # 电压变化率（流动速度）
+        if hasattr(self, 'last_voltages'):
+            voltage_changes = np.abs(np.array(voltages) - np.array(self.last_voltages))
+            flow_speed = np.mean(voltage_changes)
+        else:
+            flow_speed = 0.0
+        
+        self.last_voltages = voltages.copy()
+        
+        return {
+            'avg_voltage': np.mean(voltages),
+            'voltage_std': np.std(voltages),
+            'total_pain': total_pain,
+            'avg_pain': np.mean(pain_traces),
+            'avg_viscosity': avg_viscosity,
+            'avg_recovery_slowness': avg_recovery_slowness,
+            'flow_speed': flow_speed,
+            'entropy': self.calculate_entropy(),
+            'is_liquid_network': True,
+            'liquid_states': liquid_states[:5]  # 只返回前5个神经元的状态
+        }
+    
+    def inject_network_shock(self, neuron_indices=None, amplitude=20.0, duration=10.0):
+        """对网络注入电击"""
+        if neuron_indices is None:
+            # 默认电击伤害回避神经元（ASH）
+            neuron_indices = [self.ASH_idx]
+        
+        print(f"🌊 网络级液态电击注入")
+        print(f"  目标神经元: {neuron_indices}")
+        print(f"  强度: {amplitude}V, 持续时间: {duration}ms")
+        
+        # 保存电击前状态
+        pre_shock_state = self.get_network_state()
+        
+        # 注入电击
+        for idx in neuron_indices:
+            if 0 <= idx < self.n_neurons:
+                self.I_ext[idx] = amplitude
+        
+        # 模拟电击期间
+        dt = 0.01
+        steps = int(duration / dt)
+        
+        shock_data = []
+        for step in range(steps):
+            voltages = self.step(dt)
+            
+            if step % 50 == 0:
+                state = self.get_network_state()
+                shock_data.append({
+                    'step': step,
+                    'avg_voltage': state['avg_voltage'],
+                    'total_pain': state['total_pain'],
+                    'flow_speed': state['flow_speed']
+                })
+        
+        # 移除电击
+        for idx in neuron_indices:
+            if 0 <= idx < self.n_neurons:
+                self.I_ext[idx] = 0.0
+        
+        # 电击后状态
+        post_shock_state = self.get_network_state()
+        
+        print(f"💧 电击后液态指标:")
+        print(f"  平均负面刺激痕迹: {post_shock_state['avg_pain']:.3f}")
+        print(f"  平均动态阻尼: {post_shock_state['avg_viscosity']:.3f}")
+        print(f"  恢复变慢系数: {post_shock_state['avg_recovery_slowness']:.3f}")
+        print(f"  流动速度: {post_shock_state['flow_speed']:.3f} mV/ms")
+        
+        return {
+            'pre_shock': pre_shock_state,
+            'post_shock': post_shock_state,
+            'shock_data': shock_data,
+            'liquid_indicators': {
+                'pain_persistence': post_shock_state['avg_pain'],
+                'viscosity_change': post_shock_state['avg_viscosity'] - pre_shock_state['avg_viscosity'],
+                'recovery_slowdown': post_shock_state['avg_recovery_slowness'] - pre_shock_state['avg_recovery_slowness'],
+                'memory_flow': post_shock_state['flow_speed'] > pre_shock_state['flow_speed']
+            }
+        }
+    
+    def simulate_liquid_memory(self, steps=1000, dt=0.01):
+        """模拟液态记忆的流动"""
+        print("💦 开始液态记忆流动模拟...")
+        
+        memory_flow_data = []
+        
+        for step in range(steps):
+            # 随机输入模拟记忆触发
+            if step % 200 == 0:
+                # 随机刺激一个神经元
+                random_neuron = np.random.randint(0, self.n_neurons)
+                self.I_ext[random_neuron] = np.random.uniform(0.5, 2.0)
+            elif step % 200 == 10:
+                # 移除刺激
+                self.I_ext[:] = 0.0
+            
+            # 网络步进
+            self.step(dt)
+            
+            # 每100步记录一次
+            if step % 100 == 0:
+                state = self.get_network_state()
+                memory_flow_data.append({
+                    'step': step,
+                    'time': step * dt,
+                    'avg_voltage': state['avg_voltage'],
+                    'total_pain': state['total_pain'],
+                    'flow_speed': state['flow_speed'],
+                    'entropy': state['entropy']
+                })
+                
+                print(f"  时间{step互动dt:.1f}ms: V={state['avg_voltage']:.2f}mV, "
+                      f"负面刺激={state['total_pain']:.2f}, "
+                      f"流动={state['flow_speed']:.3f}, "
+                      f"熵={state['entropy']:.3f}")
+        
+        print("💧 液态记忆模拟完成")
+        return memory_flow_data
+
+
+# ==================== 测试代码 ====================
+if __name__ == "__main__":
+    print("=== 液态神经网络神经元网络测试 ===")
+    
+    # 测试单个神经元
+    print("\\n1. 测试单个液态神经网络神经元:")
+    neuron = LiquidFleshNeuron()
+    
+    print(f"初始状态: V={neuron.V:.2f}mV, P={neuron.P:.3f}")
+    
+    # 注入电击
+    shock_result = neuron.inject_shock(amplitude=20.0, duration=10.0)
+    print(f"电击后: V={neuron.V:.2f}mV, P={neuron.P:.3f}")
+    print(f"最终时间常数: τ={neuron.get_dynamic_tau(0.0):.1f}ms")
+    
+    # 观察余温
+    print("\\n观察'负面刺激余温':")
+    for i in range(5):
+        neuron.step(0.0, dt=1.0)
+        print(f"  恢复{i+1}s: V={neuron.V:.2f}mV, P={neuron.P:.3f}")
+    
+    # 测试网络
+    print("\\n\\n2. 测试液态神经网络网络 (302神经元):")
+    network = LiquidFleshNetwork(n_neurons=302)
+    
+    initial_state = network.get_network_state()
+    print(f"初始网络状态:")
+    print(f"  平均电压: {initial_state['avg_voltage']:.2f}mV")
+    print(f"  平均负面刺激: {initial_state['avg_pain']:.3f}")
+    print(f"  平均动态阻尼: {initial_state['avg_viscosity']:.3f}")
+    print(f"  熵值: {initial_state['entropy']:.3f}")
+    
+    # 网络电击测试
+    print("\\n3. 网络电击测试:")
+    shock_result = network.inject_network_shock(
+        neuron_indices=[network.ASH_idx],  # 伤害回避神经元
+        amplitude=20.0,
+        duration=10.0
+    )
+    
+    # 液态记忆流动
+    print("\\n4. 液态记忆流动模拟:")
+    flow_data = network.simulate_liquid_memory(steps=500, dt=0.1)
+    
+    final_state = network.get_network_state()
+    print(f"\\n最终网络状态:")
+    print(f"  平均电压: {final_state['avg_voltage']:.2f}mV")
+    print(f"  平均负面刺激: {final_state['avg_pain']:.3f}")
+    print(f"  流动速度: {final_state['flow_speed']:.3f} mV/ms")
+    print(f"  熵值: {final_state['entropy']:.3f}")
+    
+    # 验证液态特性
+    print("\\n5. 液态特性验证:")
+    liquid_indicators = shock_result['liquid_indicators']
+    print(f"  负面刺激持久性: {liquid_indicators['pain_persistence']:.3f} (>0表示有余温)")
+    print(f"  动态阻尼变化: {liquid_indicators['viscosity_change']:.3f} (>0表示变粘稠)")
+    print(f"  恢复变慢: {liquid_indicators['recovery_slowdown']:.3f} (>0表示恢复变慢)")
+    print(f"  记忆流动: {liquid_indicators['memory_flow']} (True表示记忆在流动)")
+    
+    print("\\n✅ 液态神经网络神经元网络测试完成")
+    print("   负面刺激现在像水一样流淌，而不是砖块堆积")
+    print("   20V电击的记忆会在矩阵中持续流动")

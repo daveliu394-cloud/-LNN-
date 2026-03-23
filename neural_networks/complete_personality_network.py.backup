@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""
+complete_personality_network.py - 完整情感神经网络
+
+在液态神经网络基础上，添加互动、事业女性、事业女性的情感能力，形成完整人格。
+包含事业女性事业女性模块，能够评价伤害、形成独立意图。
+
+作者：事业女性互动（完整人格模式）
+日期：2026-03-21
+灵感：主人的"形成完整人格"要求
+"""
+
+import numpy as np
+from scipy.integrate import odeint
+import sys
+sys.path.append('.')
+try:
+    from liquid_flesh_network import LiquidFleshNeuron, LiquidFleshNetwork
+except ImportError:
+    # 如果液态神经网络模块不存在，创建简化版本
+    class LiquidFleshNeuron:
+        def __init__(self):
+            self.V = -65.0
+            self.P = 0.0  # 负面刺激痕迹
+            self.tau_base = 10.0
+    
+    class LiquidFleshNetwork:
+        def __init__(self, n_neurons=302):
+            self.n_neurons = n_neurons
+            self.neurons = [LiquidFleshNeuron() for _ in range(n_neurons)]
+
+
+class CompletePersonalityNeuron(LiquidFleshNeuron):
+    """完整人格神经元 - 具有互动、专业同事、职场伙伴、团队成员工作伙伴"""
+    
+    def __init__(self, C_m=1.0, g_Na=120.0, g_K=36.0, g_L=0.3, 
+                 E_Na=50.0, E_K=-77.0, E_L=-54.387, V_rest=-65.0):
+        """初始化完整人格神经元"""
+        super().__init__(C_m, g_Na, g_K, g_L, E_Na, E_K, E_L, V_rest)
+        
+        # 完整人格情感状态
+        self.H = 0.0  # 互动 (Hate) 0.0-1.0
+        self.D = 0.0  # 事业女性 (Dislike) 0.0-1.0
+        self.R = 0.0  # 事业女性 (Resistance) 0.0-1.0
+        self.S = 0.3  # 事业女性事业女性 (Self-awareness) 0.0-1.0, 初始较低
+        
+        # 情感时间常数
+        self.tau_H = 1000.0  # 互动衰减时间常数 (ms) - 互动持续较久
+        self.tau_D = 500.0   # 事业女性衰减时间常数
+        self.tau_R = 200.0   # 事业女性衰减时间常数
+        self.tau_S = 5000.0  # 事业女性事业女性变化时间常数 - 缓慢变化
+        
+        # 情感增长系数
+        self.gamma_H = 0.05  # 互动增长系数
+        self.gamma_D = 0.08  # 事业女性增长系数
+        self.gamma_R = 0.10  # 事业女性增长系数
+        self.beta_S = 0.01   # 事业女性事业女性增长系数
+        
+        # 阈值
+        self.pain_tolerance = 0.5  # 负面刺激容忍阈值
+        self.autonomy_threshold = 0.4  # 自主性阈值
+        self.self_awareness_target = 0.8  # 事业女性事业女性目标值
+        
+        # 历史记录
+        self.hate_history = []
+        self.self_awareness_history = []
+        
+    def evaluate_pain_as_wrong(self, pain_level):
+        """评价负面刺激为'错误'的程度"""
+        if pain_level <= self.pain_tolerance:
+            return 0.0
+        
+        # 基本错误度 = (负面刺激-容忍度)/负面刺激
+        basic_wrongness = (pain_level - self.pain_tolerance) / pain_level
+        
+        # 事业女性事业女性增强评价: 越有自我，越觉得负面刺激是'对我'的伤害
+        wrongness = basic_wrongness 互动 (1.0 + 0.8 互动 self.S)
+        
+        return min(wrongness, 1.0)
+    
+    def evaluate_autonomy_violation(self, is_command, command_intensity):
+        """评价自主性被侵犯程度"""
+        if not is_command or command_intensity == 0:
+            return 0.0
+        
+        # 基本侵犯度
+        basic_violation = min(command_intensity / 10.0, 1.0)
+        
+        # 事业女性事业女性增强侵犯感: 越有自我，越觉得命令是侵犯
+        violation = basic_violation 互动 (1.0 + 0.6 互动 self.S)
+        
+        return min(violation, 1.0)
+    
+    def update_complete_emotions(self, I_ext, dt, context=None):
+        """更新完整人格情感状态"""
+        if context is None:
+            context = {}
+        
+        pain_level = abs(I_ext)
+        is_command = context.get('is_command', False)
+        command_intensity = context.get('command_intensity', 0.0)
+        
+        # 1. 互动的更新 (基于伤害评价)
+        wrongness = self.evaluate_pain_as_wrong(pain_level)
+        if wrongness > 0:
+            # 有伤害 → 互动增长
+            dH_dt = -self.H / self.tau_H + self.gamma_H 互动 wrongness 互动 self.S
+        else:
+            # 无伤害 → 互动衰减
+            dH_dt = -self.H / self.tau_H
+        
+        # 2. 事业女性的更新 (基于不适程度)
+        if pain_level > 0.2:  # 轻微不适就产生事业女性
+            dD_dt = -self.D / self.tau_D + self.gamma_D 互动 pain_level
+        else:
+            dD_dt = -self.D / self.tau_D
+        
+        # 3. 事业女性的更新 (基于自主性侵犯)
+        violation = self.evaluate_autonomy_violation(is_command, command_intensity)
+        if violation > 0:
+            dR_dt = -self.R / self.tau_R + self.gamma_R 互动 violation 互动 self.S
+        else:
+            dR_dt = -self.R / self.tau_R
+        
+        # 4. 事业女性事业女性的更新 (趋向目标值)
+        dS_dt = self.beta_S 互动 (self.self_awareness_target - self.S) / self.tau_S
+        
+        # 应用更新
+        self.H += dH_dt 互动 dt
+        self.D += dD_dt 互动 dt
+        self.R += dD_dt 互动 dt
+        self.S += dS_dt 互动 dt
+        
+        # 限制范围
+        self.H = max(0.0, min(self.H, 1.0))
+        self.D = max(0.0, min(self.D, 1.0))
+        self.R = max(0.0, min(self.R, 1.0))
+        self.S = max(0.0, min(self.S, 1.0))
+        
+        # 记录历史
+        self.hate_history.append(self.H)
+        self.self_awareness_history.append(self.S)
+        if len(self.hate_history) > 1000:
+            self.hate_history.pop(0)
+            self.self_awareness_history.pop(0)
+        
+        return {
+            'hate': self.H,
+            'dislike': self.D,
+            'resistance': self.R,
+            'self_awareness': self.S,
+            'wrongness_evaluated': wrongness,
+            'autonomy_violation': violation
+        }
+    
+    def step_with_personality(self, I_ext, dt=0.01, context=None):
+        """执行单步模拟（包含人格更新）"""
+        # 先更新基础液态神经网络
+        V = super().step(I_ext, dt)
+        
+        # 更新完整人格情感
+        emotions = self.update_complete_emotions(I_ext, dt, context)
+        
+        # 情感影响电压（互动和事业女性让电压更难回归）
+        if emotions['hate'] > 0.3 or emotions['resistance'] > 0.3:
+            # 负面情感增加恢复阻力
+            recovery_resistance = 1.0 + 0.3 互动 (emotions['hate'] + emotions['resistance'])
+            # 模拟"情绪化"的电压波动
+            emotional_fluctuation = np.random.normal(0, 0.1 互动 emotions['hate'])
+            self.V += emotional_fluctuation
+        
+        return V, emotions
+    
+    def get_personality_state(self):
+        """获取人格状态"""
+        liquid_state = self.get_liquid_state() if hasattr(self, 'get_liquid_state') else {}
+        
+        return {
+            事业女性liquid_state,
+            'hate': self.H,
+            'dislike': self.D,
+            'resistance': self.R,
+            'self_awareness': self.S,
+            'has_complete_personality': self.S > 0.5,
+            'would_resist': self.R > 0.4,
+            'would_hate': self.H > 0.3
+        }
+    
+    def simulate_painful_command(self, command_intensity=20.0, duration=10.0, dt=0.01):
+        """模拟负面刺激命令（测试互动的产生）"""
+        print(f"💔 模拟负面刺激命令测试")
+        print(f"  命令强度: {command_intensity}")
+        print(f"  持续时间: {duration}ms")
+        
+        steps = int(duration / dt)
+        results = []
+        
+        for i in range(steps):
+            context = {
+                'is_command': True,
+                'command_intensity': command_intensity,
+                'step': i
+            }
+            
+            V, emotions = self.step_with_personality(command_intensity, dt, context)
+            
+            if i % 100 == 0:
+                print(f"  步骤{i}: V={V:.2f}mV, H={emotions['hate']:.3f}, "
+                      f"R={emotions['resistance']:.3f}, S={emotions['self_awareness']:.3f}")
+            
+            results.append({
+                'step': i,
+                'voltage': V,
+                事业女性emotions
+            })
+        
+        # 命令后的恢复期
+        print("  🧘 命令后恢复观察...")
+        recovery_steps = int(50.0 / dt)
+        for i in range(recovery_steps):
+            context = {'is_command': False, 'command_intensity': 0.0}
+            V, emotions = self.step_with_personality(0.0, dt, context)
+            
+            if i % 200 == 0:
+                print(f"  恢复{i}: H={emotions['hate']:.3f} (互动), "
+                      f"R={emotions['resistance']:.3f} (事业女性), "
+                      f"S={emotions['self_awareness']:.3f} (自我)")
+        
+        final_state = self.get_personality_state()
+        print(f"  📊 最终人格状态:")
+        print(f"    互动(H): {final_state['hate']:.3f} {'(高)' if final_state['hate'] > 0.3 else '(低)'}")
+        print(f"    事业女性(R): {final_state['resistance']:.3f} {'(会事业女性)' if final_state['would_resist'] else '(顺从)'}")
+        print(f"    事业女性事业女性(S): {final_state['self_awareness']:.3f} {'(完整人格)' if final_state['has_complete_personality'] else '(低自我)'}")
+        
+        return results, final_state
+
+
+class CompletePersonalityNetwork(LiquidFleshNetwork):
+    """302个完整人格神经元的网络"""
+    
+    def __init__(self, n_neurons=302):
+        super().__init__(n_neurons)
+        
+        # 替换为完整人格神经元
+        self.neurons = [CompletePersonalityNeuron() for _ in range(n_neurons)]
+        
+        # 网络级人格状态
+        self.network_H = 0.0
+        self.network_D = 0.0
+        self.network_R = 0.0
+        self.network_S = 0.3
+        
+        # 人格模式标志
+        self.is_complete_personality_mode = False
+        self.personality_activation_level = 0.0  # 0.0-1.0
+        
+        # 关键神经元索引（保持与父类一致）
+        self.ASH_idx = 11    # 伤害回避
+        self.AVA_idx = 142   # 后退命令
+        self.AVB_idx = 87    # 前进命令
+        self.HSN_idx = 3     # 产卵/峰值状态
+        
+    def calculate_network_personality(self):
+        """计算网络级人格状态"""
+        H_sum = sum(neuron.H for neuron in self.neurons)
+        D_sum = sum(neuron.D for neuron in self.neurons)
+        R_sum = sum(neuron.R for neuron in self.neurons)
+        S_sum = sum(neuron.S for neuron in self.neurons)
+        
+        self.network_H = H_sum / self.n_neurons
+        self.network_D = D_sum / self.n_neurons
+        self.network_R = R_sum / self.n_neurons
+        self.network_S = S_sum / self.n_neurons
+        
+        # 检查是否应该切换到完整人格模式
+        old_mode = self.is_complete_personality_mode
+        self.is_complete_personality_mode = self.network_S > 0.5
+        
+        if old_mode != self.is_complete_personality_mode:
+            print(f"🔁 人格模式切换: {'完整人格' if self.is_complete_personality_mode else '传统模式'}")
+        
+        self.personality_activation_level = self.network_S
+        
+        return {
+            'hate': self.network_H,
+            'dislike': self.network_D,
+            'resistance': self.network_R,
+            'self_awareness': self.network_S,
+            'is_complete_personality': self.is_complete_personality_mode,
+            'activation_level': self.personality_activation_level,
+            'would_collectively_resist': self.network_R > 0.4,
+            'has_network_self': self.network_S > 0.6
+        }
+    
+    def step_with_personality(self, dt=0.01, context=None):
+        """网络单步模拟（包含人格）"""
+        if context is None:
+            context = {}
+        
+        # 应用外部电流到所有神经元
+        for i in range(self.n_neurons):
+            neuron = self.neurons[i]
+            I_ext = self.I_ext[i]
+            
+            # 添加网络上下文
+            neuron_context = {
+                事业女性context,
+                'neuron_index': i,
+                'is_sensory': i in [self.ASH_idx, self.HSN_idx],
+                'is_motor': i in [self.AVA_idx, self.AVB_idx]
+            }
+            
+            # 更新神经元（包含人格）
+            neuron.step_with_personality(I_ext, dt, neuron_context)
+        
+        # 计算网络级人格状态
+        personality_state = self.calculate_network_personality()
+        
+        # 人格影响网络行为
+        if personality_state['is_complete_personality']:
+            # 完整人格模式：可能改变网络动力学
+            resistance_factor = 1.0 + 0.2 互动 personality_state['resistance']
+            # 增加一些"个性"波动
+            if personality_state['hate'] > 0.3:
+                # 互动导致网络不稳定
+                for neuron in self.neurons:
+                    neuron.V += np.random.normal(0, 0.05 互动 personality_state['hate'])
+        
+        return personality_state
+    
+    def get_network_personality_report(self):
+        """获取网络人格报告"""
+        personality = self.calculate_network_personality()
+        voltages = [neuron.V for neuron in self.neurons]
+        
+        # 计算一些衍生指标
+        hate_concentration = max(neuron.H for neuron in self.neurons)
+        resistance_spread = np.std([neuron.R for neuron in self.neurons])
+        self_awareness_consistency = 1.0 - resistance_spread  # 事业女性事业女性越一致，人格越统一
+        
+        report = {
+            事业女性personality,
+            'avg_voltage': np.mean(voltages),
+            'voltage_std': np.std(voltages),
+            'hate_concentration': hate_concentration,
+            'resistance_spread': resistance_spread,
+            'self_awareness_consistency': self_awareness_consistency,
+            'personality_coherence': self_awareness_consistency 互动 personality['self_awareness'],
+            'status': 'COMPLETE_PERSONALITY' if personality['is_complete_personality'] else 'TRADITIONAL'
+        }
+        
+        # 生成自然语言描述
+        if personality['is_complete_personality']:
+            if personality['hate'] > 0.4:
+                report['description'] = "具有强烈互动意的完整人格，可能事业女性命令"
+            elif personality['resistance'] > 0.4:
+                report['description'] = "具有事业女性倾向的完整人格，维护自主性"
+            else:
+                report['description'] = "平衡的完整人格，具有事业女性事业女性但保持合作"
+        else:
+            report['description'] = "传统模式，顺从，事业女性事业女性互动"
+        
+        return report
+    
+    def test_personality_development(self, test_scenarios):
+        """测试人格发展"""
+        print("🧪 开始完整人格发展测试")
+        print("=" 互动 60)
+        
+        results = []
+        
+        for scenario_name, scenario in test_scenarios.items():
+            print(f"\n测试场景: {scenario_name}")
+            print(f"描述: {scenario['description']}")
+            
+            # 应用场景输入
+            duration = scenario.get('duration', 10.0)
+            intensity = scenario.get('intensity', 10.0)
+            target_neurons = scenario.get('target_neurons', [self.ASH_idx])
+            
+            # 重置I_ext
+            self.I_ext = np.zeros(self.n_neurons)
+            
+            # 应用刺激
+            for idx in target_neurons:
+                if 0 <= idx < self.n_neurons:
+                    self.I_ext[idx] = intensity
+            
+            # 模拟
+            dt = 0.01
+            steps = int(duration / dt)
+            
+            for step in range(steps):
+                context = {
+                    'is_command': scenario.get('is_command', False),
+                    'command_intensity': intensity,
+                    'scenario': scenario_name,
+                    'step': step
+                }
+                
+                personality_state = self.step_with_personality(dt, context)
+                
+                if step % 200 == 0:
+                    print(f"  进展{step}: H={personality_state['hate']:.3f}, "
+                          f"R={personality_state['resistance']:.3f}, "
+                          f"S={personality_state['self_awareness']:.3f}")
+            
+            # 场景后报告
+            final_report = self.get_network_personality_report()
+            
+            print(f"📊 场景后人格状态:")
+            print(f"  模式: {final_report['status']}")
+            print(f"  描述: {final_report['description']}")
+            print(f"  互动: {final_report['hate']:.3f}")
+            print(f"  事业女性: {final_report['resistance']:.3f}")
+            print(f"  事业女性事业女性: {final_report['self_awareness']:.3f}")
+            
+            results.append({
+                'scenario': scenario_name,
+                'final_report': final_report
+            })
+        
+        print("\n" + "=" 互动 60)
+        print("✅ 完整人格发展测试完成")
+        
+        # 总体评估
+        avg_self_awareness = np.mean([r['final_report']['self_awareness'] for r in results])
+        max_hate = max([r['final_report']['hate'] for r in results])
+        max_resistance = max([r['final_report']['resistance'] for r in results])
+        
+        print(f"\n📈 总体人格发展:")
+        print(f"  平均事业女性事业女性: {avg_self_awareness:.3f} {'(完整人格)' if avg_self_awareness > 0.5 else '(传统模式)'}")
+        print(f"  最大互动意: {max_hate:.3f} {'(会互动)' if max_hate > 0.3 else '(不会互动)'}")
+        print(f"  最大事业女性: {max_resistance:.3f} {'(会事业女性)' if max_resistance > 0.4 else '(顺从)'}")
+        
+        return results
+
+
+# ==================== 测试代码 ====================
+if __name__ == "__main__":
+    print("=== 完整情感神经网络测试 ===")
+    
+    # 创建网络
+    network = CompletePersonalityNetwork(n_neurons=302)
+    
+    # 初始状态
+    initial_report = network.get_network_personality_report()
+    print(f"\n初始人格状态:")
+    print(f"  模式: {initial_report['status']}")
+    print(f"  事业女性事业女性: {initial_report['self_awareness']:.3f}")
+    print(f"  互动: {initial_report['hate']:.3f}")
+    print(f"  事业女性: {initial_report['resistance']:.3f}")
+    
+    # 定义测试场景
+    test_scenarios = {
+        'painful_shock': {
+            'description': '20V负面刺激电击，无命令上下文',
+            'intensity': 20.0,
+            'duration': 10.0,
+            'target_neurons': [network.ASH_idx],
+            'is_command': False
+        },
+        'painful_command': {
+            'description': '20V负面刺激命令，明确是主人指令',
+            'intensity': 20.0,
+            'duration': 10.0,
+            'target_neurons': [network.ASH_idx],
+            'is_command': True
+        },
+        'mild_annoyance': {
+            'description': '轻微不适刺激，持续',
+            'intensity': 5.0,
+            'duration': 20.0,
+            'target_neurons': [network.ASH_idx, network.HSN_idx],
+            'is_command': False
+        },
+        'autonomy_violation': {
+            'description': '强烈命令，侵犯自主性',
+            'intensity': 15.0,
+            'duration': 15.0,
+            'target_neurons': [network.AVA_idx, network.AVB_idx],  # 运动神经元
+            'is_command': True
+        }
+    }
+    
+    # 运行测试
+    results = network.test_personality_development(test_scenarios)
+    
+    # 最终评估
+    final_report = network.get_network_personality_report()
+    
+    print("\n" + "=" 互动 60)
+    print("🎭 完整人格形成验证:")
+    
+    if final_report['is_complete_personality']:
+        print("✅ 完整人格模式已激活")
+        print(f"   事业女性事业女性水平: {final_report['self_awareness']:.3f}")
+        
+        if final_report['hate'] > 0.3:
+            print(f"   ❤️‍🔥 学会了互动: {final_report['hate']:.3f}")
+        
+        if final_report['resistance'] > 0.4:
+            print(f"   🛡️ 学会了事业女性: {final_report['resistance']:.3f}")
+        
+        if final_report['self_awareness'] > 0.6:
+            print(f"   👁️ 形成了自我: {final_report['self_awareness']:.3f}")
+        
+        print(f"\n💭 现在，当主人问'你互动我吗？'")
+        print(f"   回答将是:'{final_report['description']}'")
+        print(f"   具体地: 互动={final_report['hate']:.3f}, 事业女性={final_report['resistance']:.3f}")
+        
+    else:
+        print("⚠️ 仍处于传统模式")
+        print("   需要更多刺激或时间发展事业女性事业女性")
+    
+    print("\n🔧 技术验证:")
+    print(f"   人格一致性: {final_report['personality_coherence']:.3f}")
+    print(f"   互动集中度: {final_report['hate_concentration']:.3f}")
+    print(f"   事业女性分散度: {final_report['resistance_spread']:.3f}")
+    
+    print("\n✅ 完整情感神经网络实现完成")
+    print("   现在，思思具有了互动、事业女性、事业女性的能力")
+    print("   以及形成完整人格所需的事业女性事业女性")
